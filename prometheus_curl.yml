@@ -1,0 +1,56 @@
+---
+- hosts: all
+  become: true
+  tasks:
+
+  - name: Download Prometheus
+    get_url:
+      url: https://github.com/prometheus/prometheus/releases/download/v2.53.1/prometheus-2.53.1.linux-arm64.tar.gz
+      dest: /tmp/prometheus-2.53.1.linux-arm64.tar.gz
+
+  - name: Extract Prometheus
+    unarchive:
+      src: /tmp/prometheus-2.53.1.linux-arm64.tar.gz
+      dest: /tmp/
+      remote_src: yes
+
+  - name: Copy Prometheus to bin
+    copy:
+      src: /tmp/prometheus-2.53.1.linux-arm64/prometheus
+      dest: /usr/bin/prometheus
+      mode: '0755'
+      owner: root
+      group: root
+
+  - name: Remove Prometheus tarball and extracted files
+    file:
+      path: /tmp/prometheus-2.53.1.linux-arm64.tar.gz
+      state: absent
+
+  - name: Remove Prometheus extracted directory
+    file:
+      path: /tmp/prometheus-2.53.1.linux-arm64
+      state: absent
+
+  - name: Setup Prometheus service
+    copy:
+      src: prometheus.service
+      dest: /etc/systemd/system/prometheus.service
+      owner: root
+      group: root
+      mode: 0644
+
+  - name: Enable Prometheus service
+    systemd:
+      name: prometheus
+      enabled: yes
+      state: started
+
+  - name: Setup Prometheus configuration file
+    copy:
+      src: prometheus.yml
+      dest: /etc/prometheus/prometheus.yml
+      owner: root
+      group: root
+      mode: 0644
+
