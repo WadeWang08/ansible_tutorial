@@ -1,56 +1,102 @@
 ---
 - hosts: all
-  become: true
   tasks:
 
   - name: Download Prometheus
-    get_url:
-      url: https://github.com/prometheus/prometheus/releases/download/v2.53.1/prometheus-2.53.1.linux-arm64.tar.gz
-      dest: /tmp/prometheus-2.53.1.linux-arm64.tar.gz
+    become: true
+    command: wget https://github.com/prometheus/prometheus/releases/download/v2.53.1/prometheus-2.53.1.linux-arm64.tar.gz -O /tmp/prometheus-2.53.1.linux-arm64.tar.gz
+
 
   - name: Extract Prometheus
-    unarchive:
-      src: /tmp/prometheus-2.53.1.linux-arm64.tar.gz
-      dest: /tmp/
-      remote_src: yes
+    become: true
+    command: tar xvfz /tmp/prometheus-2.53.1.linux-arm64.tar.gz -C /tmp/
 
   - name: Copy Prometheus to bin
+    become: true
     copy:
       src: /tmp/prometheus-2.53.1.linux-arm64/prometheus
       dest: /usr/bin/prometheus
+      remote_src: yes
       mode: '0755'
       owner: root
       group: root
 
-  - name: Remove Prometheus tarball and extracted files
+  - name: Remove Prometheus tarball
+    become: true
     file:
       path: /tmp/prometheus-2.53.1.linux-arm64.tar.gz
       state: absent
 
-  - name: Remove Prometheus extracted directory
-    file:
-      path: /tmp/prometheus-2.53.1.linux-arm64
-      state: absent
+  - name: Add Prometheus user and group
+    become: true
+    user:
+      name: prometheus
+      group: prometheus
+      system: yes
+      shell: /bin/false
+      create_home: false
 
-  - name: Setup Prometheus service
+  - name: Create Prometheus configuration directory
+    become: true
+    file:
+      path: /etc/prometheus
+      state: directory
+      owner: root
+      group: root
+      mode: 0755
+
+  - name: Setup Prometheus configuration file
+    become: true
     copy:
-      src: prometheus.service
+      src: /tmp/prometheus-2.53.1.linux-arm64/prometheus.yml
+      dest: /etc/prometheus/prometheus.yml
+      remote_src: yes
+      owner: root
+      group: root
+      mode: 0644
+
+  - name: Create Prometheus data directory
+    become: true
+    file:
+      path: /var/lib/prometheus/data
+      state: directory
+      owner: root
+      group: root
+      mode: 0755
+
+  - name: Create Prometheus service file
+    become: true
+    copy:
+      content: |
+        [Unit]
+        Description=Prometheus
+        Wants=network-online.target
+        After=network-online.target
+
+        [Service]
+        User=prometheus
+        Group=prometheus
+        Restart=on-failure
+        ExecStart=/usr/bin/prometheus \
+          --config.file=/etc/prometheus/prometheus.yml \
+          --storage.tsdb.path=/var/lib/prometheus/data \
+
+        [Install]
+        WantedBy=multi-user.target
       dest: /etc/systemd/system/prometheus.service
       owner: root
       group: root
       mode: 0644
 
   - name: Enable Prometheus service
+    become: true
     systemd:
       name: prometheus
       enabled: yes
       state: started
 
-  - name: Setup Prometheus configuration file
-    copy:
-      src: prometheus.yml
-      dest: /etc/prometheus/prometheus.yml
-      owner: root
-      group: root
-      mode: 0644
-
+  - name: Remove Prometheus extracted directory
+    become: true
+    file:
+      path: /tmp/prometheus-2.53.1.linux-arm64
+      state: absent
